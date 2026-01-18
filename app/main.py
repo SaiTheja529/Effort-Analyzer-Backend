@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
@@ -26,7 +25,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
-       allowed_origins = [
+    allowed_origins = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "https://effort-analyzer-frontend.onrender.com",
@@ -34,17 +33,13 @@ def create_app() -> FastAPI:
         "*",
     ]
 
-
-
-      app.add_middleware(
+    app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-   
 
     app.include_router(repo_explain_router)
     app.include_router(analysis_router)
@@ -54,9 +49,6 @@ def create_app() -> FastAPI:
     app.include_router(rankings_router)
     app.include_router(auth_router)
     app.include_router(data_export_router)
-
-
-
 
     @app.on_event("startup")
     async def on_startup():
@@ -68,7 +60,6 @@ def create_app() -> FastAPI:
     app.include_router(repo_context_router)  # ← THIS LINE MUST EXIST
 
     return app
-
 
 
 app = create_app()

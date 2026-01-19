@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     allowed_origins = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "https://effort-analyzer-front-end.vercel.app/",
         "https://effort-analyzer-frontend.onrender.com",
         "https://effort-analyzer-backend.onrender.com",
         "*",

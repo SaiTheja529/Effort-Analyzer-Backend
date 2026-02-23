@@ -3,6 +3,7 @@ import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.repo_context import RepoContext
 from app.models.repository import Repository
 from app.services.gemini_service import GeminiService
@@ -66,7 +67,7 @@ Provide a {detail_level} explanation with:
             loop = asyncio.get_running_loop()
             text = await asyncio.wait_for(
                 loop.run_in_executor(None, self.gemini.generate, prompt),
-                timeout=20.0,
+                timeout=settings.AI_SUMMARY_TIMEOUT_SECONDS,
             )
         except Exception as e:
             raise RuntimeError(f"Gemini error: {str(e)}")

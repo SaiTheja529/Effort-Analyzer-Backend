@@ -315,7 +315,7 @@ class AnalysisService:
         try:
             response = await asyncio.wait_for(
                 loop.run_in_executor(None, self.gemini.generate, prompt),
-                timeout=20.0,
+                timeout=settings.AI_SUMMARY_TIMEOUT_SECONDS,
             )
             normalized = (response or "").strip()
             return normalized[:320] if normalized else summary_fallback

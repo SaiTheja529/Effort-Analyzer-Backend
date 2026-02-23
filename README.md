@@ -168,7 +168,7 @@ source .venv/bin/activate</pre>
   <h3>Configure Environment Variables</h3>
   <pre>GITHUB_TOKEN=your_github_token
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemma-3-4b-it
+GEMINI_MODEL=gemini-2.0-flash-lite
 XAI_API_KEY=your_grok_xai_api_key
 XAI_MODEL=grok-3-fast-latest
 XAI_BASE_URL=https://api.x.ai
@@ -179,6 +179,10 @@ EFFORT_V2_LLM_ENABLED=true
 EFFORT_V2_MAX_FILES_FOR_LLM=12
 EFFORT_V2_MAX_PATCH_CHARS=9000
 EFFORT_V2_TIMEOUT_SECONDS=35
+AI_REQUEST_TIMEOUT_SECONDS=30
+AI_REQUEST_RETRIES=0
+AI_RETRY_BACKOFF_SECONDS=0.5
+AI_SUMMARY_TIMEOUT_SECONDS=40
 DATABASE_URL=sqlite+aiosqlite:///./effort_analyzer.db</pre>
   <p>
     If Gemini fails (quota/rate/model errors), backend automatically falls back to Grok when
@@ -187,6 +191,11 @@ DATABASE_URL=sqlite+aiosqlite:///./effort_analyzer.db</pre>
   <p>
     Use an xAI key from <code>console.x.ai</code> for Grok fallback.
     Keys that start with <code>gsk_</code> are Groq keys and won't work with xAI.
+  </p>
+  <p>
+    For hosted deployments, if you still see AI timeout fallbacks on very large commits,
+    reduce <code>EFFORT_V2_MAX_PATCH_CHARS</code> (for example to <code>5000</code>) and keep
+    <code>XAI_API_KEY</code> configured for automatic provider fallback.
   </p>
 
   <h3>Start the Backend Server</h3>

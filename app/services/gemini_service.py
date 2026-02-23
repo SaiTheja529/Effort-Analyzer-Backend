@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import httpx
@@ -21,7 +22,6 @@ XAI_MODEL_FALLBACKS: tuple[str, ...] = (
     "grok-3",
 )
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-REQUEST_TIMEOUT_SECONDS = 20.0
 
 
 class GeminiService:
@@ -32,6 +32,9 @@ class GeminiService:
     def __init__(self):
         self.gemini_api_key = (settings.GEMINI_API_KEY or "").strip()
         self.gemini_model = settings.GEMINI_MODEL
+        self.request_timeout_seconds = max(5.0, float(settings.AI_REQUEST_TIMEOUT_SECONDS))
+        self.request_retries = max(0, int(settings.AI_REQUEST_RETRIES))
+        self.request_retry_backoff_seconds = max(0.0, float(settings.AI_RETRY_BACKOFF_SECONDS))
 
         self.xai_api_key = (settings.XAI_API_KEY or "").strip()
         self.xai_model = settings.XAI_MODEL
@@ -62,6 +65,14 @@ class GeminiService:
 
     def _xai_model_candidates(self) -> list[str]:
         return self._dedupe([self.xai_model, *XAI_MODEL_FALLBACKS])
+
+    def _max_attempts(self) -> int:
+        return 1 + self.request_retries
+
+    def _wait_before_retry(self, attempt: int) -> None:
+        if self.request_retry_backoff_seconds <= 0:
+            return
+        time.sleep(self.request_retry_backoff_seconds * max(1, attempt))
 
     def _extract_gemini_text(self, response_json: dict[str, Any]) -> str:
         chunks: list[str] = []
@@ -160,38 +171,51 @@ class GeminiService:
         }
 
         last_error: Exception | None = None
+        max_attempts = self._max_attempts()
 
-        with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        with httpx.Client(timeout=self.request_timeout_seconds) as client:
             for model_name in self._gemini_model_candidates():
                 url = f"{GEMINI_API_BASE}/models/{model_name}:generateContent"
-                try:
-                    response = client.post(
-                        url,
-                        params={"key": self.gemini_api_key},
-                        json=body,
-                    )
-                except httpx.TimeoutException as exc:
-                    last_error = RuntimeError(
-                        f"Gemini request timed out after {REQUEST_TIMEOUT_SECONDS}s"
-                    )
-                    break
-                except httpx.RequestError as exc:
-                    last_error = RuntimeError(f"Gemini network error: {exc}")
-                    break
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        response = client.post(
+                            url,
+                            params={"key": self.gemini_api_key},
+                            json=body,
+                        )
+                    except httpx.TimeoutException:
+                        last_error = RuntimeError(
+                            f"Gemini request timed out after {self.request_timeout_seconds}s "
+                            f"on model '{model_name}'"
+                        )
+                        if attempt < max_attempts:
+                            self._wait_before_retry(attempt)
+                            continue
+                        # Try next model on timeout to improve resilience.
+                        break
+                    except httpx.RequestError as exc:
+                        last_error = RuntimeError(f"Gemini network error: {exc}")
+                        if attempt < max_attempts:
+                            self._wait_before_retry(attempt)
+                            continue
+                        break
 
-                if response.status_code == 200:
-                    text = self._extract_gemini_text(response.json())
-                    return text if text else "No response"
+                    if response.status_code == 200:
+                        text = self._extract_gemini_text(response.json())
+                        return text if text else "No response"
 
-                current_error = self._build_error("Gemini", model_name, response)
-                last_error = current_error
+                    current_error = self._build_error("Gemini", model_name, response)
+                    last_error = current_error
 
-                if self._should_try_next_model(response.status_code, current_error):
-                    continue
+                    if self._should_try_next_model(response.status_code, current_error):
+                        # 404/429/5xx/model issues: move to next model candidate.
+                        break
 
-                break
+                    raise RuntimeError(f"Gemini generation failed: {current_error}") from current_error
 
-        raise RuntimeError(f"Gemini generation failed: {last_error}") from last_error
+        raise RuntimeError(
+            f"Gemini generation failed: {last_error or 'unknown error'}"
+        ) from last_error
 
     def _generate_with_xai(self, prompt: str) -> str:
         if not self.xai_api_key:
@@ -200,38 +224,49 @@ class GeminiService:
         last_error: Exception | None = None
         url = f"{self.xai_base_url}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {self.xai_api_key}"}
+        max_attempts = self._max_attempts()
 
-        with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+        with httpx.Client(timeout=self.request_timeout_seconds) as client:
             for model_name in self._xai_model_candidates():
                 body = {
                     "model": model_name,
                     "messages": [{"role": "user", "content": prompt}],
                 }
 
-                try:
-                    response = client.post(url, headers=headers, json=body)
-                except httpx.TimeoutException as exc:
-                    last_error = RuntimeError(
-                        f"Grok request timed out after {REQUEST_TIMEOUT_SECONDS}s"
-                    )
-                    break
-                except httpx.RequestError as exc:
-                    last_error = RuntimeError(f"Grok network error: {exc}")
-                    break
+                for attempt in range(1, max_attempts + 1):
+                    try:
+                        response = client.post(url, headers=headers, json=body)
+                    except httpx.TimeoutException:
+                        last_error = RuntimeError(
+                            f"Grok request timed out after {self.request_timeout_seconds}s "
+                            f"on model '{model_name}'"
+                        )
+                        if attempt < max_attempts:
+                            self._wait_before_retry(attempt)
+                            continue
+                        break
+                    except httpx.RequestError as exc:
+                        last_error = RuntimeError(f"Grok network error: {exc}")
+                        if attempt < max_attempts:
+                            self._wait_before_retry(attempt)
+                            continue
+                        break
 
-                if response.status_code == 200:
-                    text = self._extract_xai_text(response.json())
-                    return text if text else "No response"
+                    if response.status_code == 200:
+                        text = self._extract_xai_text(response.json())
+                        return text if text else "No response"
 
-                current_error = self._build_error("Grok", model_name, response)
-                last_error = current_error
+                    current_error = self._build_error("Grok", model_name, response)
+                    last_error = current_error
 
-                if self._should_try_next_model(response.status_code, current_error):
-                    continue
+                    if self._should_try_next_model(response.status_code, current_error):
+                        break
 
-                break
+                    raise RuntimeError(f"Grok generation failed: {current_error}") from current_error
 
-        raise RuntimeError(f"Grok generation failed: {last_error}") from last_error
+        raise RuntimeError(
+            f"Grok generation failed: {last_error or 'unknown error'}"
+        ) from last_error
 
     def generate(self, prompt: str) -> str:
         provider_errors: list[str] = []

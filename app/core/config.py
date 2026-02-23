@@ -27,7 +27,13 @@ class Settings(BaseSettings):
 
     # Gemini
     GEMINI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemma-3-4b-it"
+    GEMINI_MODEL: str = "gemini-2.0-flash-lite"
+
+    # AI request behavior
+    AI_REQUEST_TIMEOUT_SECONDS: float = 30.0
+    AI_REQUEST_RETRIES: int = 0
+    AI_RETRY_BACKOFF_SECONDS: float = 0.5
+    AI_SUMMARY_TIMEOUT_SECONDS: float = 40.0
 
     # Grok (xAI) fallback
     XAI_API_KEY: str | None = None

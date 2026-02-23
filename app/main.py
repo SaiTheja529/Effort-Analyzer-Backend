@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.core.config import settings
 from app.db.base import Base
@@ -16,7 +17,16 @@ from app.routers.rankings import router as rankings_router
 from app.routers.auth import router as auth_router
 from app.routers.data_export import router as data_export_router
 
-print("GITHUB TOKEN LOADED:", settings.GITHUB_TOKEN[:6])
+
+def _run_startup_migrations(sync_conn) -> None:
+    inspector = inspect(sync_conn)
+    if "jobs" not in inspector.get_table_names():
+        return
+
+    columns = {col["name"] for col in inspector.get_columns("jobs")}
+    if "owner_key" not in columns:
+        sync_conn.execute(text("ALTER TABLE jobs ADD COLUMN owner_key VARCHAR"))
+        sync_conn.execute(text("CREATE INDEX IF NOT EXISTS ix_jobs_owner_key ON jobs (owner_key)"))
 
 
 def create_app() -> FastAPI:
@@ -27,16 +37,16 @@ def create_app() -> FastAPI:
 
     allowed_origins = [
         "http://localhost:5173",
+        " http://localhost:5174",
         "http://127.0.0.1:5173",
         "https://effort-analyzer-front-end-ctli.vercel.app",
         "https://effort-analyzer-frontend.onrender.com",
-        "https://effort-analyzer-backend.onrender.com",
-        "*",
     ]
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
+        allow_origin_regex=r"^https://effort-analyzer-front-end-.*\.vercel\.app$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -55,6 +65,7 @@ def create_app() -> FastAPI:
     async def on_startup():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_run_startup_migrations)
 
     # Routers
     app.include_router(health_router)

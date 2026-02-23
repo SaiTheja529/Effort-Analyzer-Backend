@@ -26,8 +26,24 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_SECRET: str | None = None
 
     # Gemini
-    GEMINI_API_KEY: str
-    GEMINI_MODEL: str = "gemini-3-flash-preview"
+    GEMINI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemma-3-4b-it"
+
+    # Grok (xAI) fallback
+    XAI_API_KEY: str | None = None
+    XAI_MODEL: str = "grok-3-fast-latest"
+    XAI_BASE_URL: str = "https://api.x.ai"
+
+    # Local auth
+    AUTH_SECRET_KEY: str = "change-this-local-auth-secret"
+    AUTH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
+
+    # Effort scoring v2
+    EFFORT_V2_ENABLED: bool = True
+    EFFORT_V2_LLM_ENABLED: bool = True
+    EFFORT_V2_MAX_FILES_FOR_LLM: int = 12
+    EFFORT_V2_MAX_PATCH_CHARS: int = 9000
+    EFFORT_V2_TIMEOUT_SECONDS: float = 35.0
 
 
 # Singleton settings object

@@ -22,3 +22,29 @@ class GitHubUserResponse(BaseModel):
     name: str | None = None
     email: str | None = None
     html_url: str | None = None
+
+
+class LocalRegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str | None = None
+
+
+class LocalLoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LocalUserResponse(BaseModel):
+    id: int
+    email: str
+    name: str | None = None
+    login: str | None = None
+    avatar_url: str | None = None
+    provider: str = "local"
+
+
+class LocalAuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: LocalUserResponse

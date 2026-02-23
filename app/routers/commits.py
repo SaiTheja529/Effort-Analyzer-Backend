@@ -36,6 +36,9 @@ async def list_commits(
             "lines_added": c.lines_added,
             "lines_deleted": c.lines_deleted,
             "effort_score": round(c.effort_score_v1, 2),
+            "score_source": c.ai_type,
+            "score_confidence": c.ai_confidence,
+            "score_reason": c.ai_reason_short,
             "ai_summary": c.ai_summary,
         }
         for c in commits

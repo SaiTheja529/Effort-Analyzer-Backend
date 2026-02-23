@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.dependencies.auth import CurrentActor, get_current_actor
 from app.db.session import get_db
 from app.models.repository import Repository
 from app.models.developer import Developer
@@ -16,11 +17,46 @@ def _dt(value):
 
 
 @router.get("/export")
-async def export_all_data(db: AsyncSession = Depends(get_db)):
-    repos = (await db.execute(select(Repository))).scalars().all()
-    devs = (await db.execute(select(Developer))).scalars().all()
-    commits = (await db.execute(select(Commit))).scalars().all()
-    jobs = (await db.execute(select(Job))).scalars().all()
+async def export_all_data(
+    current_actor: CurrentActor = Depends(get_current_actor),
+    db: AsyncSession = Depends(get_db),
+):
+    jobs = (
+        await db.execute(select(Job).where(Job.owner_key == current_actor.owner_key))
+    ).scalars().all()
+
+    repo_names = sorted(
+        {
+            (j.input or {}).get("repo_full_name")
+            for j in jobs
+            if (j.input or {}).get("repo_full_name")
+        }
+    )
+
+    repos = []
+    commits = []
+    devs = []
+
+    if repo_names:
+        repos = (
+            await db.execute(
+                select(Repository).where(Repository.full_name.in_(repo_names))
+            )
+        ).scalars().all()
+        repo_ids = [r.id for r in repos]
+
+        if repo_ids:
+            commits = (
+                await db.execute(select(Commit).where(Commit.repo_id.in_(repo_ids)))
+            ).scalars().all()
+
+            developer_ids = sorted({c.developer_id for c in commits})
+            if developer_ids:
+                devs = (
+                    await db.execute(
+                        select(Developer).where(Developer.id.in_(developer_ids))
+                    )
+                ).scalars().all()
 
     return {
         "repositories": [

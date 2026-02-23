@@ -1,3 +1,5 @@
+import asyncio
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,9 +63,13 @@ Provide a {detail_level} explanation with:
 
         # ✅ Safe Gemini call
         try:
-            text = self.gemini.generate(prompt)
+            loop = asyncio.get_running_loop()
+            text = await asyncio.wait_for(
+                loop.run_in_executor(None, self.gemini.generate, prompt),
+                timeout=20.0,
+            )
         except Exception as e:
-            raise ValueError(f"Gemini error: {str(e)}")
+            raise RuntimeError(f"Gemini error: {str(e)}")
 
         return {
             "overview": text

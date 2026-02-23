@@ -11,6 +11,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_key: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
 
     job_type: Mapped[str] = mapped_column(String, index=True)
     status: Mapped[str] = mapped_column(String, index=True)

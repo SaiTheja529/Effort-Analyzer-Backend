@@ -13,8 +13,10 @@ class JobService:
         db: AsyncSession,
         job_type: str,
         input_data: dict,
+        owner_key: str | None = None,
     ) -> Job:
         job = Job(
+            owner_key=owner_key,
             job_type=job_type,
             status="queued",
             input=input_data,
